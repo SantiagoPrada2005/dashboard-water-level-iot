@@ -5,6 +5,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
 import { Droplets, TrendingUp, TrendingDown, Activity } from "lucide-react"
 import { useWaterLevel, useWaterLevelStats, useChartData } from "@/hooks/useWaterLevel"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 
 const chartConfig = {
   level: {
@@ -254,7 +256,13 @@ export default function Dashboard() {
                     <tr key={item.id} className="border-b hover:bg-muted/50">
                       <td className="p-2">{item.id}</td>
                       <td className="p-2">
-                        {new Date(item.date * 1000).toLocaleString('es-ES')}
+                        {format(
+                          typeof item.date === 'string' 
+                            ? new Date(item.date) 
+                            : new Date(item.date * 1000), 
+                          'dd/MM/yyyy HH:mm:ss', 
+                          { locale: es }
+                        )}
                       </td>
                       <td className="p-2 font-mono">{item.level.toFixed(2)}</td>
                     </tr>

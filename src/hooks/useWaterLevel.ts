@@ -1,10 +1,12 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 interface WaterLevelData {
   id: number
-  date: number
+  date: number | string
   level: number
 }
 
@@ -149,16 +151,30 @@ export function useWaterLevelStats(data: WaterLevelData[]) {
 
 // Hook para formatear datos para gráficos
 export function useChartData(data: WaterLevelData[]) {
-  return data.map(item => ({
-    id: item.id,
-    date: new Date(item.date * 1000).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }),
-    level: item.level,
-    timestamp: item.date,
-    fullDate: new Date(item.date * 1000)
-  })).sort((a, b) => a.timestamp - b.timestamp)
+  return data.map(item => {
+    // Manejar tanto timestamps Unix (números) como strings ISO
+    let dateObj: Date
+    let timestamp: number
+    
+    if (typeof item.date === 'string') {
+      // Si es string ISO, convertir directamente
+      dateObj = new Date(item.date)
+      timestamp = dateObj.getTime() / 1000 // Convertir a timestamp Unix
+    } else {
+      // Si es timestamp Unix (segundos), convertir a Date
+      dateObj = new Date(item.date * 1000)
+      timestamp = item.date
+    }
+    
+    return {
+      id: item.id,
+      // Formato para mostrar en gráficos: "dd/MM HH:mm"
+      date: format(dateObj, 'dd/MM HH:mm', { locale: es }),
+      // Formato alternativo para tooltips: "dd/MM/yyyy HH:mm"
+      fullDate: format(dateObj, 'dd/MM/yyyy HH:mm', { locale: es }),
+      level: item.level,
+      timestamp: timestamp,
+      dateObject: dateObj
+    }
+  }).sort((a, b) => a.timestamp - b.timestamp)
 }
