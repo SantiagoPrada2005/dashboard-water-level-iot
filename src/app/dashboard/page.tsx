@@ -1,76 +1,27 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
 import { Droplets, TrendingUp, TrendingDown, Activity } from "lucide-react"
-
-interface WaterLevelData {
-  id: number
-  date: number
-  level: number
-}
-
-interface ChartData {
-  date: string
-  level: number
-  timestamp: number
-}
+import { useWaterLevel, useWaterLevelStats, useChartData } from "@/hooks/useWaterLevel"
 
 const chartConfig = {
   level: {
     label: "Nivel de Agua",
     color: "var(--chart-1)",
   },
-}
+} satisfies ChartConfig
 
 export default function Dashboard() {
-  const [data, setData] = useState<WaterLevelData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchData = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch('/api/water-level')
-      if (!response.ok) {
-        throw new Error('Error al obtener los datos')
-      }
-      const result = await response.json()
-      setData(result.data || [])
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchData()
-    // Actualizar datos cada 30 segundos
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const chartData: ChartData[] = data.map(item => ({
-    date: new Date(item.date * 1000).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }),
-    level: item.level,
-    timestamp: item.date
-  })).sort((a, b) => a.timestamp - b.timestamp)
-
-  const currentLevel = data.length > 0 ? data[data.length - 1]?.level : 0
-  const previousLevel = data.length > 1 ? data[data.length - 2]?.level : currentLevel
-  const levelChange = currentLevel - previousLevel
-  const averageLevel = data.length > 0 ? data.reduce((sum, item) => sum + item.level, 0) / data.length : 0
-  const maxLevel = data.length > 0 ? Math.max(...data.map(item => item.level)) : 0
-  const minLevel = data.length > 0 ? Math.min(...data.map(item => item.level)) : 0
+  // Usar el hook personalizado con auto-refresh habilitado
+  const { data, loading, error, refetch } = useWaterLevel(true, 30000)
+  
+  // Usar el hook de estadísticas
+  const stats = useWaterLevelStats(data)
+  
+  // Usar el hook para formatear datos del gráfico
+  const chartData = useChartData(data)
 
   if (loading) {
     return (
@@ -90,7 +41,7 @@ export default function Dashboard() {
           <CardContent>
             <p>{error}</p>
             <button 
-              onClick={fetchData}
+              onClick={refetch}
               className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
             >
               Reintentar
@@ -123,12 +74,12 @@ export default function Dashboard() {
               <Droplets className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{currentLevel.toFixed(2)} cm</div>
+              <div className="text-2xl font-bold">{stats.currentLevel.toFixed(2)} cm</div>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                {levelChange > 0 ? (
-                  <><TrendingUp className="h-3 w-3 text-green-500" /> +{levelChange.toFixed(2)} cm</>
-                ) : levelChange < 0 ? (
-                  <><TrendingDown className="h-3 w-3 text-red-500" /> {levelChange.toFixed(2)} cm</>
+                {stats.isIncreasing ? (
+                  <><TrendingUp className="h-3 w-3 text-green-500" /> +{stats.levelChange.toFixed(2)} cm</>
+                ) : stats.isDecreasing ? (
+                  <><TrendingDown className="h-3 w-3 text-red-500" /> {stats.levelChange.toFixed(2)} cm</>
                 ) : (
                   <><Activity className="h-3 w-3 text-gray-500" /> Sin cambios</>
                 )}
@@ -142,9 +93,9 @@ export default function Dashboard() {
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{averageLevel.toFixed(2)} cm</div>
+              <div className="text-2xl font-bold">{stats.averageLevel.toFixed(2)} cm</div>
               <p className="text-xs text-muted-foreground">
-                Basado en {data.length} mediciones
+                Basado en {stats.totalReadings} mediciones
               </p>
             </CardContent>
           </Card>
@@ -155,7 +106,7 @@ export default function Dashboard() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{maxLevel.toFixed(2)} cm</div>
+              <div className="text-2xl font-bold">{stats.maxLevel.toFixed(2)} cm</div>
               <p className="text-xs text-muted-foreground">
                 Nivel más alto registrado
               </p>
@@ -168,7 +119,7 @@ export default function Dashboard() {
               <TrendingDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{minLevel.toFixed(2)} cm</div>
+              <div className="text-2xl font-bold">{stats.minLevel.toFixed(2)} cm</div>
               <p className="text-xs text-muted-foreground">
                 Nivel más bajo registrado
               </p>
