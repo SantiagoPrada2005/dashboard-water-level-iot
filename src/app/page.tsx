@@ -1,289 +1,330 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Droplets, Gauge, Shield, Smartphone, Wifi, Zap, BarChart3, Bell, Settings, Users } from "lucide-react";
+"use client"
 
-export default function Home() {
+import { useEffect, useState } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
+import { Droplets, TrendingUp, TrendingDown, Activity } from "lucide-react"
+
+interface WaterLevelData {
+  id: number
+  date: number
+  level: number
+}
+
+interface ChartData {
+  date: string
+  level: number
+  timestamp: number
+}
+
+const chartConfig = {
+  level: {
+    label: "Nivel de Agua",
+    color: "var(--chart-1)",
+  },
+}
+
+export default function Dashboard() {
+  const [data, setData] = useState<WaterLevelData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/water-level')
+      if (!response.ok) {
+        throw new Error('Error al obtener los datos')
+      }
+      const result = await response.json()
+      setData(result.data || [])
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+    // Actualizar datos cada 30 segundos
+    const interval = setInterval(fetchData, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const chartData: ChartData[] = data.map(item => ({
+    date: new Date(item.date * 1000).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    level: item.level,
+    timestamp: item.date
+  })).sort((a, b) => a.timestamp - b.timestamp)
+
+  const currentLevel = data.length > 0 ? data[data.length - 1]?.level : 0
+  const previousLevel = data.length > 1 ? data[data.length - 2]?.level : currentLevel
+  const levelChange = currentLevel - previousLevel
+  const averageLevel = data.length > 0 ? data.reduce((sum, item) => sum + item.level, 0) / data.length : 0
+  const maxLevel = data.length > 0 ? Math.max(...data.map(item => item.level)) : 0
+  const minLevel = data.length > 0 ? Math.min(...data.map(item => item.level)) : 0
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-96">
+          <CardHeader>
+            <CardTitle className="text-destructive">Error</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{error}</p>
+            <button 
+              onClick={fetchData}
+              className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            >
+              Reintentar
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:to-blue-900">
-      {/* Header */}
-      <header className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50 dark:border-gray-700">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Droplets className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900 dark:text-white">AquaMonitor</span>
-          </div>
-          <nav className="hidden md:flex items-center space-x-6">
-            <a href="#features" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Características</a>
-            <a href="#how-it-works" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Cómo Funciona</a>
-            <a href="#pricing" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Precios</a>
-            <div className="flex items-center space-x-2">
-              <ThemeToggle />
-              <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">Comenzar</Button>
-            </div>
-          </nav>
-        </div>
-      </header>
-
-      {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto text-center">
-          <Badge variant="secondary" className="mb-4 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700">
-            <Zap className="w-3 h-3 mr-1" />
-            Tecnología IoT Avanzada
-          </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
-            Monitoreo Inteligente del
-            <span className="text-blue-600 dark:text-blue-400 block">Nivel del Agua</span>
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl font-bold text-foreground flex items-center justify-center gap-2">
+            <Droplets className="h-8 w-8 text-blue-500" />
+            Dashboard de Nivel de Agua IoT
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
-            Controla y supervisa el nivel del agua en tiempo real con nuestros dispositivos IoT de última generación. 
-            Recibe alertas instantáneas y toma decisiones informadas para optimizar el uso del agua.
+          <p className="text-muted-foreground">
+            Monitoreo en tiempo real del nivel de agua
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="text-lg px-8 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">
-              <Smartphone className="w-5 h-5 mr-2" />
-              Probar Demo
-            </Button>
-            <Button variant="outline" size="lg" className="text-lg px-8 border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-              Ver Video
-            </Button>
-          </div>
         </div>
-      </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-20 px-4 bg-white dark:bg-gray-800">
-        <div className="container mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Características Principales
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Tecnología de vanguardia para el monitoreo preciso y confiable del agua
-            </p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow dark:bg-gray-700 dark:border-gray-600">
-              <CardHeader>
-                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mb-4">
-                  <Gauge className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <CardTitle className="dark:text-white">Medición Precisa</CardTitle>
-                <CardDescription className="dark:text-gray-300">
-                  Sensores ultrasónicos de alta precisión que proporcionan mediciones exactas del nivel del agua
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow dark:bg-gray-700 dark:border-gray-600">
-              <CardHeader>
-                <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center mb-4">
-                  <Wifi className="w-6 h-6 text-green-600 dark:text-green-400" />
-                </div>
-                <CardTitle className="dark:text-white">Conectividad IoT</CardTitle>
-                <CardDescription className="dark:text-gray-300">
-                  Conexión inalámbrica confiable que transmite datos en tiempo real a la nube
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow dark:bg-gray-700 dark:border-gray-600">
-              <CardHeader>
-                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mb-4">
-                  <Bell className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-                </div>
-                <CardTitle className="dark:text-white">Alertas Inteligentes</CardTitle>
-                <CardDescription className="dark:text-gray-300">
-                  Notificaciones automáticas cuando los niveles alcanzan umbrales críticos
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow dark:bg-gray-700 dark:border-gray-600">
-              <CardHeader>
-                <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center mb-4">
-                  <BarChart3 className="w-6 h-6 text-orange-600 dark:text-orange-400" />
-                </div>
-                <CardTitle className="dark:text-white">Análisis Avanzado</CardTitle>
-                <CardDescription className="dark:text-gray-300">
-                  Dashboard con gráficos y estadísticas detalladas para análisis de tendencias
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow dark:bg-gray-700 dark:border-gray-600">
-              <CardHeader>
-                <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-lg flex items-center justify-center mb-4">
-                  <Shield className="w-6 h-6 text-red-600 dark:text-red-400" />
-                </div>
-                <CardTitle className="dark:text-white">Seguridad Total</CardTitle>
-                <CardDescription className="dark:text-gray-300">
-                  Encriptación de extremo a extremo y protocolos de seguridad avanzados
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow dark:bg-gray-700 dark:border-gray-600">
-              <CardHeader>
-                <div className="w-12 h-12 bg-cyan-100 dark:bg-cyan-900 rounded-lg flex items-center justify-center mb-4">
-                  <Settings className="w-6 h-6 text-cyan-600 dark:text-cyan-400" />
-                </div>
-                <CardTitle className="dark:text-white">Fácil Configuración</CardTitle>
-                <CardDescription className="dark:text-gray-300">
-                  Instalación plug-and-play con configuración automática y calibración inteligente
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* How it Works Section */}
-      <section id="how-it-works" className="py-20 px-4 bg-gray-50 dark:bg-gray-900">
-        <div className="container mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Cómo Funciona
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Proceso simple y automatizado para el monitoreo continuo
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-600 dark:bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-bold text-white">1</span>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Instalación del Sensor</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Coloca el sensor ultrasónico en el tanque o depósito de agua. 
-                La instalación es rápida y no requiere herramientas especiales.
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Nivel Actual</CardTitle>
+              <Droplets className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{currentLevel.toFixed(2)} cm</div>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                {levelChange > 0 ? (
+                  <><TrendingUp className="h-3 w-3 text-green-500" /> +{levelChange.toFixed(2)} cm</>
+                ) : levelChange < 0 ? (
+                  <><TrendingDown className="h-3 w-3 text-red-500" /> {levelChange.toFixed(2)} cm</>
+                ) : (
+                  <><Activity className="h-3 w-3 text-gray-500" /> Sin cambios</>
+                )}
               </p>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-600 dark:bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-bold text-white">2</span>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Conexión a la Red</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                El dispositivo se conecta automáticamente a tu red WiFi y 
-                comienza a transmitir datos a la plataforma en la nube.
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Promedio</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{averageLevel.toFixed(2)} cm</div>
+              <p className="text-xs text-muted-foreground">
+                Basado en {data.length} mediciones
               </p>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-600 dark:bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-bold text-white">3</span>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Monitoreo en Tiempo Real</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Accede a los datos desde cualquier dispositivo, configura alertas 
-                y recibe notificaciones instantáneas.
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Máximo</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{maxLevel.toFixed(2)} cm</div>
+              <p className="text-xs text-muted-foreground">
+                Nivel más alto registrado
               </p>
-            </div>
-          </div>
-        </div>
-      </section>
+            </CardContent>
+          </Card>
 
-      {/* Stats Section */}
-      <section className="py-20 px-4 bg-blue-600 dark:bg-blue-800">
-        <div className="container mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 text-center text-white">
-            <div>
-              <div className="text-4xl font-bold mb-2">99.9%</div>
-              <div className="text-blue-100 dark:text-blue-200">Precisión</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold mb-2">24/7</div>
-              <div className="text-blue-100 dark:text-blue-200">Monitoreo</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold mb-2">1000+</div>
-              <div className="text-blue-100 dark:text-blue-200">Clientes Satisfechos</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold mb-2">5 min</div>
-              <div className="text-blue-100 dark:text-blue-200">Instalación</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 px-4 bg-white dark:bg-gray-800">
-        <div className="container mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-6">
-            ¿Listo para Optimizar tu Gestión del Agua?
-          </h2>
-          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
-            Únete a miles de usuarios que ya confían en AquaMonitor para el control inteligente del agua
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="text-lg px-8 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">
-              <Users className="w-5 h-5 mr-2" />
-              Comenzar Prueba Gratuita
-            </Button>
-            <Button variant="outline" size="lg" className="text-lg px-8 border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-              Contactar Ventas
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 dark:bg-black text-white py-12 px-4">
-        <div className="container mx-auto">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
-                  <Droplets className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-bold">AquaMonitor</span>
-              </div>
-              <p className="text-gray-400 dark:text-gray-300">
-                Soluciones inteligentes para el monitoreo del agua con tecnología IoT avanzada.
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Mínimo</CardTitle>
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{minLevel.toFixed(2)} cm</div>
+              <p className="text-xs text-muted-foreground">
+                Nivel más bajo registrado
               </p>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Producto</h3>
-              <ul className="space-y-2 text-gray-400 dark:text-gray-300">
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">Características</a></li>
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">Precios</a></li>
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">API</a></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Soporte</h3>
-              <ul className="space-y-2 text-gray-400 dark:text-gray-300">
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">Documentación</a></li>
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">Contacto</a></li>
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">Estado del Sistema</a></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Empresa</h3>
-              <ul className="space-y-2 text-gray-400 dark:text-gray-300">
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">Acerca de</a></li>
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-white dark:hover:text-blue-400 transition-colors">Carreras</a></li>
-              </ul>
-            </div>
-          </div>
-          <Separator className="my-8 bg-gray-800 dark:bg-gray-700" />
-          <div className="text-center text-gray-400 dark:text-gray-300">
-            <p>&copy; 2025 AquaMonitor. Todos los derechos reservados.</p>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-      </footer>
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Line Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Tendencia del Nivel de Agua</CardTitle>
+              <CardDescription>
+                Evolución del nivel de agua a lo largo del tiempo
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[300px]">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fontSize: 12 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 12 }}
+                    label={{ value: 'Nivel (cm)', angle: -90, position: 'insideLeft' }}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="level" 
+                    stroke="var(--chart-1)" 
+                    strokeWidth={2}
+                    dot={{ fill: "var(--chart-1)", strokeWidth: 2, r: 4 }}
+                  />
+                </LineChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* Area Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Área de Nivel de Agua</CardTitle>
+              <CardDescription>
+                Visualización del área bajo la curva del nivel de agua
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[300px]">
+                <AreaChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fontSize: 12 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 12 }}
+                    label={{ value: 'Nivel (cm)', angle: -90, position: 'insideLeft' }}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area 
+                    type="monotone" 
+                    dataKey="level" 
+                    stroke="var(--chart-2)" 
+                    fill="var(--chart-2)"
+                    fillOpacity={0.3}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Bar Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Distribución de Niveles</CardTitle>
+            <CardDescription>
+              Gráfico de barras mostrando las últimas mediciones
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={chartConfig} className="h-[400px]">
+              <BarChart data={chartData.slice(-10)}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12 }}
+                  label={{ value: 'Nivel (cm)', angle: -90, position: 'insideLeft' }}
+                />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar 
+                  dataKey="level" 
+                  fill="var(--chart-3)"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        {/* Data Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Datos Recientes</CardTitle>
+            <CardDescription>
+              Últimas 10 mediciones registradas
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2">ID</th>
+                    <th className="text-left p-2">Fecha y Hora</th>
+                    <th className="text-left p-2">Nivel (cm)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.slice(-10).reverse().map((item) => (
+                    <tr key={item.id} className="border-b hover:bg-muted/50">
+                      <td className="p-2">{item.id}</td>
+                      <td className="p-2">
+                        {new Date(item.date * 1000).toLocaleString('es-ES')}
+                      </td>
+                      <td className="p-2 font-mono">{item.level.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Footer */}
+        <div className="text-center text-sm text-muted-foreground">
+          <p>Dashboard actualizado automáticamente cada 30 segundos</p>
+          <p>Última actualización: {new Date().toLocaleString('es-ES')}</p>
+        </div>
+      </div>
     </div>
-  );
+  )
 }
